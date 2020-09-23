@@ -22,7 +22,7 @@
 #include <efi.h>
 #include <efilib.h>
 
-EFI_STATUS security_policy_install (VOID);
-BOOLEAN check_secureboot (VOID);
+EFI_STATUS security_policy_install (void);
+BOOLEAN check_secureboot (void);
 
 #endif

@@ -53,6 +53,9 @@ static EFI_GUID ExitGuid =
 static EFI_EVENT NotifyEvent = NULL;
 static EFI_EVENT ExitEvent = NULL;
 static EFI_GET_VARIABLE orig_get_variable = NULL;
+static EFI_EXIT_BOOT_SERVICES orig_exit_bs = NULL;
+
+static UINT8 sbflag = 0;
 
 static inline int
 rt_strcmp (const CHAR16 *s1, const CHAR16 *s2)
@@ -78,10 +81,20 @@ get_variable_wrapper (CHAR16 *VariableName, EFI_GUID *VendorGuid,
                                 Attributes, DataSize, Data);
     if (rt_strcmp (sb, VariableName) == 0)
     {
-        *(UINT8 *) Data = 0;
+        *(UINT8 *) Data = sbflag;
         *DataSize = 1;
     }
     return status;
+}
+
+static EFI_STATUS EFIAPI
+exit_bs_wrapper (EFI_HANDLE image_handle,
+                 UINTN map_key)
+{
+  if (orig_get_variable)
+    RT->GetVariable = orig_get_variable;
+  orig_get_variable = NULL;
+  return orig_exit_bs (image_handle, map_key);
 }
 
 static VOID EFIAPI
@@ -145,30 +158,36 @@ efi_unload (EFI_HANDLE image_handle)
 }
 
 EFI_STATUS
-hook_get_variable (EFI_HANDLE image_handle)
+hook_get_variable (EFI_HANDLE image_handle, BOOLEAN enable_sb)
 {
     EFI_LOADED_IMAGE *LoadedImage = NULL;
     EFI_STATUS status;
 
+    if (enable_sb)
+      sbflag = 1;
+
+    Print (L"Open LoadedImageProtocol ... ");
     status = BS->OpenProtocol (image_handle, &LoadedImageProtocol,
                                (VOID**)&LoadedImage, image_handle,
                                NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
     if (status != EFI_SUCCESS)
     {
-        Print (L"Can't open LoadedImageProtocol\n");
+        Print (L"FAIL\nCan't open LoadedImageProtocol\n");
         return status;
     }
     // Install our protocol interface
     // This is needed to keep our driver loaded
     DummyProtocalData dummy = { 0 };
+    Print (L"OK\nRegister protocol interface ... ");
     status = LibInstallProtocolInterfaces (&image_handle, &ProtocolGuid,
                                            &dummy, NULL);
     // Return if interface failed to register
     if (status != EFI_SUCCESS)
     {
-        Print (L"Can't register interface\n");
+        Print (L"FAIL\nCan't register interface\n");
         return status;
     }
+    Print (L"OK\nCreate global events ... ");
     // Set our image unload routine
     LoadedImage->Unload = (EFI_IMAGE_UNLOAD) efi_unload;
     // Create global event for VirtualAddressMap
@@ -178,7 +197,7 @@ hook_get_variable (EFI_HANDLE image_handle)
     // Return if event create failed
     if (status != EFI_SUCCESS)
     {
-        Print(L"Can't create SetVirtualAddressMapEvent\n");
+        Print(L"FAIL\nCan't create SetVirtualAddressMapEvent\n");
         return status;
     }
     // Create global event for ExitBootServices
@@ -188,12 +207,30 @@ hook_get_variable (EFI_HANDLE image_handle)
     // Return if event create failed (yet again)
     if (status != EFI_SUCCESS)
     {
-        Print (L"Can't create ExitBootServicesEvent\n");
+        Print (L"FAIL\nCan't create ExitBootServicesEvent\n");
         return status;
     }
 
     orig_get_variable =
         (EFI_GET_VARIABLE) set_service_pointer (&RT->Hdr, (VOID**)&RT->GetVariable,
                                                 (VOID**)&get_variable_wrapper);
+    Print (L"OK\nHook GetVariable 0x%lX->0x%lX\n",
+           orig_get_variable, RT->GetVariable);
     return EFI_SUCCESS;
+}
+
+/* BootServices */
+EFI_STATUS
+bs_hook_get_variable (BOOLEAN enable_sb)
+{
+  if (enable_sb)
+      sbflag = 1;
+  orig_get_variable = RT->GetVariable;
+  RT->GetVariable = get_variable_wrapper;
+  Print (L"Hook GetVariable 0x%lX->0x%lX\n", orig_get_variable, RT->GetVariable);
+  orig_exit_bs = BS->ExitBootServices;
+  BS->ExitBootServices = exit_bs_wrapper;
+  Print (L"Hook ExitBootServices 0x%lX->0x%lX\n",
+         orig_exit_bs, BS->ExitBootServices);
+  return EFI_SUCCESS;
 }

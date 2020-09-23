@@ -22,6 +22,7 @@
 #include <efi.h>
 #include <efilib.h>
 
-EFI_STATUS hook_get_variable (EFI_HANDLE image_handle);
+EFI_STATUS hook_get_variable (EFI_HANDLE image_handle, BOOLEAN enable_sb);
+EFI_STATUS bs_hook_get_variable (BOOLEAN enable_sb);
 
 #endif

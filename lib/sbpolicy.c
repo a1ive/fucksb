@@ -21,7 +21,6 @@
 
 #include <sbpolicy.h>
 
-static EFI_GUID GV_GUID = EFI_GLOBAL_VARIABLE;
 static EFI_GUID SECURITY_PROTOCOL_GUID =
 {
     0xA46423E3, 0x4617, 0x49f1,
@@ -80,7 +79,7 @@ static EFIAPI EFI_SECURITY_FILE_AUTHENTICATION_STATE esfas = NULL;
 static EFIAPI EFI_SECURITY2_FILE_AUTHENTICATION es2fa = NULL;
 
 EFI_STATUS
-security_policy_install (VOID)
+security_policy_install (void)
 {
     EFI_SECURITY_PROTOCOL *security_protocol = NULL;
     EFI_SECURITY2_PROTOCOL *security2_protocol = NULL;
@@ -93,65 +92,74 @@ security_policy_install (VOID)
     /* Don't bother with status here.  The call is allowed
      * to fail, since SECURITY2 was introduced in PI 1.2.1
      * If it fails, use security2_protocol == NULL as indicator */
+    Print (L"Locate Security2Protocol ... ");
     status = BS->LocateProtocol (&SECURITY2_PROTOCOL_GUID, NULL,
                                  (VOID **)&security2_protocol);
     if (status != EFI_SUCCESS)
-        Print (L"Warning: Failed to locate Security2Protocol\n");
+        Print (L"NOT FOUND\n");
+    else
+        Print (L"OK\n");
 
+    Print (L"Locate SecurityProtocol ... ");
     status = BS->LocateProtocol (&SECURITY_PROTOCOL_GUID, NULL,
                                  (VOID **)&security_protocol);
     if (status != EFI_SUCCESS)
     {
-        Print (L"Failed to locate SecurityProtocol\n");
+        Print (L"FAIL\nFailed to locate SecurityProtocol\n");
         return status;
     }
+    Print (L"OK\n");
 
     if (security2_protocol)
     {
+        Print (L"Hook Security2Protocol->FileAuthentication ... ");
         es2fa = security2_protocol->FileAuthentication;
         security2_protocol->FileAuthentication = security2_policy_authentication;
         /* check for security policy in write protected memory */
         if (security2_protocol->FileAuthentication
             !=  security2_policy_authentication)
         {
-            Print (L"Security2Protocol: ACCESS_DENIED\n");
+            Print (L"ACCESS DENIED\n");
             return EFI_ACCESS_DENIED;
         }
-        Print (L"Security2Protocol: OK\n");
+        Print (L"OK\n");
     }
 
+    Print (L"Hook SecurityProtocol->FileAuthenticationState ... ");
     esfas = security_protocol->FileAuthenticationState;
     security_protocol->FileAuthenticationState = security_policy_authentication;
     /* check for security policy in write protected memory */
     if (security_protocol->FileAuthenticationState
         !=  security_policy_authentication)
     {
-        Print (L"SecurityProtocol: ACCESS_DENIED\n");
+        Print (L"ACCESS DENIED\n");
         return EFI_ACCESS_DENIED;
     }
-    Print (L"SecurityProtocol: OK\n");
+    Print (L"OK\n");
 
     return EFI_SUCCESS;
 }
 
 BOOLEAN
-check_secureboot (VOID)
+check_secureboot (void)
 {
     EFI_STATUS status;
-    UINT8 SecureBoot;
-    UINTN DataSize = sizeof (SecureBoot);
+    EFI_GUID gv_guid = EFI_GLOBAL_VARIABLE;
+    UINT8 sb;
+    UINTN datasize = sizeof (sb);
 
-    status = RT->GetVariable (L"SecureBoot", &GV_GUID, NULL, &DataSize, &SecureBoot);
+    Print (L"Check secure boot status ... ");
+    status = RT->GetVariable (L"SecureBoot", &gv_guid, NULL, &datasize, &sb);
     if (status != EFI_SUCCESS)
     {
-        Print (L"Not a Secure Boot Platform\n");
+        Print (L"UNSUPPORTED\n");
         return FALSE;
     }
-    if (!SecureBoot)
+    if (!sb)
     {
-        Print (L"Secure Boot Disabled\n");
+        Print (L"DISABLED\n");
         return FALSE;
     }
-    Print (L"Secure Boot Enabled\n");
+    Print (L"ENABLED\n");
     return TRUE;
 }
