@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: initialize
+      run: |
+        sudo -E apt-get -y install build-essential gnu-efi
+        mkdir bin
+    - name: build x86_64
+      run: |
+        make ARCH=x86_64
+        cp fucksb.efi bin/fucksbx64.efi
+        make clean
+    - name: build ia32
+      run: |
+        make ARCH=ia32
+        cp fucksb.efi bin/fucksbia32.efi
+        make clean
+    - name: compress
+      run: tar -zcvf fucksb.tar.gz -C bin .
+    - name: upload
+      uses: marvinpinto/action-automatic-releases@latest
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        automatic_release_tag: "latest"
+        prerelease: false
+        title: "Development Build"
+        files: fucksb.tar.gz
