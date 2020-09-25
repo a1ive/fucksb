@@ -12,10 +12,16 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: initialize
       run: |
-        sudo -E apt-get -y install build-essential gnu-efi
+        sudo -E apt-get -y install build-essential libc6-dev-i386
         mkdir bin
+    - name: build gnu-efi
+      run: |
+        make -C gnu-efi ARCH=x86_64
+        make -C gnu-efi ARCH=ia32
     - name: build x86_64
       run: |
         make ARCH=x86_64
