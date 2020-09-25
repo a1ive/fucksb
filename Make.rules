@@ -7,23 +7,31 @@ else
   $(error unsupported architecture $(ARCH))
 endif
 
+GNUEFI_DIR      = $(TOPDIR)/gnu-efi
+GNUEFI_LIBS     = lib
+GNUEFI_INC      = $(GNUEFI_DIR)/inc
+GNUEFI_LIBDIR   = $(GNUEFI_DIR)/$(ARCH)/lib
+GNUEFI_LIB      = $(GNUEFI_LIBDIR)/libefi.a
+
 INCDIR := -I$(TOPDIR)
 INCDIR += -I$(TOPDIR)include/
-INCDIR += -I/usr/include/efi
-INCDIR += -I/usr/include/efi/$(ARCH)
-INCDIR += -I/usr/include/efi/protocol
+INCDIR += -I$(GNUEFI_INC)
+INCDIR += -I$(GNUEFI_INC)/$(ARCH)
+INCDIR += -I$(GNUEFI_INC)/protocol
 
 CFLAGS = -Os -g $(ARCH3264) -fpic -Werror -fshort-wchar -fno-stack-protector -ffreestanding -fno-stack-check
-CRTOBJ = crt0-efi-$(ARCH).o
-CRTPATHS = /lib /lib64 /lib/efi /lib64/efi /usr/lib /usr/lib64 /usr/lib32 /usr/lib/efi /usr/lib64/efi /usr/lib/gnuefi /usr/lib64/gnuefi
-CRTPATH = $(shell for f in $(CRTPATHS); do if [ -e $$f/$(CRTOBJ) ]; then echo $$f; break; fi; done)
-CRTOBJS = $(CRTPATH)/$(CRTOBJ)
-# there's a bug in the gnu tools ... the .reloc section has to be
-# aligned otherwise the file alignment gets screwed up
-LDSCRIPT = elf_$(ARCH)_efi.lds
-LDFLAGS := -nostdlib
-LDFLAGS += -shared -Bsymbolic $(CRTOBJS) -L $(CRTPATH) -L /usr/lib -L /usr/lib64 -L /usr/lib32 -T $(LDSCRIPT)
-LOADLIBES = -lefi -lgnuefi $(shell $(CC) $(ARCH3264) -print-libgcc-file-name)
+
+CRT_DIR = $(GNUEFI_DIR)/$(ARCH)/gnuefi
+CRTOBJS = $(CRT_DIR)/crt0-efi-$(ARCH).o
+LDSCRIPT = $(GNUEFI_DIR)/gnuefi/elf_$(ARCH)_efi.lds
+
+LDFLAGS := -nostdlib -shared -Bsymbolic
+LDFLAGS += -L$(GNUEFI_LIBDIR) -L$(CRT_DIR) $(CRTOBJS)
+
+LOADLIBES := -lefi -lgnuefi
+LOADLIBES += $(shell $(CC) $(ARCH3264) -print-libgcc-file-name)
+LOADLIBES += -T $(LDSCRIPT)
+
 FORMAT = --target=efi-rtdrv-$(ARCH)
 OBJCOPY = objcopy
 
