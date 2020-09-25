@@ -18,10 +18,6 @@ jobs:
       run: |
         sudo -E apt-get -y install build-essential libc6-dev-i386
         mkdir bin
-    - name: build gnu-efi
-      run: |
-        make -C gnu-efi ARCH=x86_64
-        make -C gnu-efi ARCH=ia32
     - name: build x86_64
       run: |
         make ARCH=x86_64
@@ -33,7 +29,10 @@ jobs:
         cp fucksb.efi bin/fucksbia32.efi
         make clean
     - name: compress
-      run: tar -zcvf fucksb.tar.gz -C bin .
+      run: |
+        cp README.md bin/
+        cp COPYING bin/LICENSE
+        tar -zcvf fucksb.tar.gz -C bin .
     - name: upload
       uses: marvinpinto/action-automatic-releases@latest
       with:
